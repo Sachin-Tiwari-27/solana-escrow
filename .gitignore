@@ -1,0 +1,27 @@
+# Node & TypeScript
+node_modules/
+dist/
+lib/
+.DS_Store
+*.log
+
+# Solana + Anchor
+target/
+.macaroon
+.anchor/
+test-ledger/
+*.so
+*.out
+
+# VS Code
+.vscode/
+
+# OS
+Thumbs.db
+*.swp
+
+# Rust
+Cargo.lock
+
+# IDEs
+.idea/
