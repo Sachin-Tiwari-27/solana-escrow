@@ -13,7 +13,7 @@ pub struct Complete<'info> {
 pub fn handler(ctx: Context<Complete>) -> Result<()> {
     let escrow = &mut ctx.accounts.escrow;
 
-    require!(escrow.status == EscrowStatus::Pending, EscrowStatus::InvalidState);
+    require!(escrow.status == EscrowStatus::Pending, EscrowError::InvalidState);
     escrow.status = EscrowStatus::Completed;
 
     Ok(())

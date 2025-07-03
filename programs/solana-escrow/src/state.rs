@@ -18,5 +18,5 @@ pub struct Escrow {
 }
 
 impl Escrow {
-    pub const LEN: 32 + 32 + 32 + 8 + 1 + 1;
+    pub const LEN: usize = 32 + 32 + 32 + 8 + 1 + 1;
 }

@@ -3,7 +3,7 @@ use crate::state::{Escrow, EscrowStatus};
 use crate::error::*;
 
 #[derive(Accounts)]
-pub struct cancel,'info> {
+pub struct Cancel<'info> {
     #[account (mut, has_one = initializer, close = initializer )]
     pub escrow: Account<'info, Escrow>,
 

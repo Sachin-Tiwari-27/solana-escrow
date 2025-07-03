@@ -20,7 +20,7 @@ pub mod solana_escrow {
         deposit::handler(ctx)
     }
 
-    pub fn cancel(ctx: Context<CancelEscrow>) -> Result<()> {
+    pub fn cancel(ctx: Context<Cancel>) -> Result<()> {
         cancel_escrow::handler(ctx)
     }
 

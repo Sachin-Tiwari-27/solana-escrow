@@ -1,11 +1,11 @@
 use anchor_lang::prelude::*;
-use crate::state::{Escorw, EscrowStatus};
+use crate::state::{Escrow, EscrowStatus};
 use crate::error::*;
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {
     #[account(mut, has_one = initializer)]
-    pub escrow: Account<'info, Escorw>,
+    pub escrow: Account<'info, Escrow>,
 
     pub initializer: Signer<'info>,
 }
