@@ -2,12 +2,12 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum EscrowError{
-    #[msg("Unauthorized operation.")]
-    Unauthorized,
+    #[msg("Tokens already deposited.")]
+    AlreadyDeposited,
 
-    #[msg("Token transfer failed.")]
-    TransferFailed,
+    #[msg("Tokens not yet deposited.")]
+    NotFunded,
 
     #[msg("Escrow already completed or cancelled.")]
-    InvalidState,
+    AlreadyCompleted,
 }

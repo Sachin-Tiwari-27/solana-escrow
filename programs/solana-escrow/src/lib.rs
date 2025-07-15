@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
 
-pub mod instructions;
 pub mod state;
 pub mod error;
+pub mod instructions;
 
 use instructions::*;
 
@@ -16,18 +16,17 @@ pub mod solana_escrow {
         initialize_escrow::handler(ctx, amount)
     }
 
-    pub fn deposit(ctx: Context<Deposit>) -> Result<()> {
+    pub fn deposit(ctx: Context<DepositEscrow>) -> Result<()> {
         deposit::handler(ctx)
     }
 
-    pub fn cancel(ctx: Context<Cancel>) -> Result<()> {
-        cancel_escrow::handler(ctx)
+    pub fn complete(ctx: Context<CompleteEscrow>) -> Result<()> {
+        complete::handler(ctx)
     }
 
-    pub fn complete(ctx: Context<Complete>) -> Result<()> {
-        complete::handler(ctx)
+    pub fn cancel(ctx: Context<CancelEscrow>) -> Result<()> {
+        cancel_escrow::handler(ctx)
     }
 }
 
-#[derive(Accounts)]
-pub struct Initialize {}
+
