@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount, Mint, InitializeAccount, TokenAccount as SPLTokenAccount};
+use anchor_spl::token::{Token, TokenAccount, Mint};
 
-use crate::{state::Escrow, error::EscrowError};
+use crate::state::Escrow;
 
 #[derive(Accounts)]
 pub struct InitializeEscrow<'info> {
@@ -47,7 +47,7 @@ pub struct InitializeEscrow<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handler(ctx: Context<InitializeEscrow>, amount: u64) -> Result<()> {
+pub fn initialize_escrow_handler(ctx: Context<InitializeEscrow>, amount: u64) -> Result<()> {
     let escrow = &mut ctx.accounts.escrow_account;
 
     escrow.initializer = ctx.accounts.initializer.key();

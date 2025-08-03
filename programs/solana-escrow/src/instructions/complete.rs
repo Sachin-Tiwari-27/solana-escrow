@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{
-    TokenAccount, TokenInterface, transfer_checked, TransferChecked
+    TokenAccount, TokenInterface, transfer_checked, TransferChecked, Mint
 };
 
 use crate::{state::Escrow, error::EscrowError};
@@ -37,11 +37,14 @@ pub struct CompleteEscrow<'info> {
     #[account()]
     pub initializer_receive_token_account: InterfaceAccount<'info, TokenAccount>,
 
+    /// The mint for the token being escrowed
+    pub mint: InterfaceAccount<'info, Mint>,
+
     /// Token program
     pub token_program: Interface<'info, TokenInterface>,
 }
 
-pub fn handler(ctx: Context<CompleteEscrow>) -> Result<()> {
+pub fn complete_handler(ctx: Context<CompleteEscrow>) -> Result<()> {
     let escrow_info = ctx.accounts.escrow_account.to_account_info();
     let escrow = &mut ctx.accounts.escrow_account;
 
@@ -62,7 +65,7 @@ pub fn handler(ctx: Context<CompleteEscrow>) -> Result<()> {
 
     let cpi_accounts = TransferChecked {
         from: ctx.accounts.vault.to_account_info(),
-        mint: ctx.accounts.vault.mint.to_account_info(),
+        mint: ctx.accounts.mint.to_account_info(),
         to: ctx.accounts.taker_receive_token_account.to_account_info(),
         authority: escrow_info,
     };
@@ -74,7 +77,7 @@ pub fn handler(ctx: Context<CompleteEscrow>) -> Result<()> {
     );
 
     // Get decimals from the mint
-    let decimals = ctx.accounts.vault.mint.decimals;
+    let decimals = ctx.accounts.mint.decimals;
     transfer_checked(cpi_ctx, escrow.amount, decimals)?;
 
     // Update escrow state
