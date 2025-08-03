@@ -13,19 +13,19 @@ pub mod solana_escrow {
     use super::*;
 
     pub fn initialize_escrow(ctx: Context<InitializeEscrow>, amount: u64) -> Result<()> {
-        initialize_escrow::handler(ctx, amount)
+        initialize_escrow_handler(ctx, amount)
     }
 
     pub fn deposit(ctx: Context<DepositEscrow>) -> Result<()> {
-        deposit::handler(ctx)
+        deposit_handler(ctx)
     }
 
     pub fn complete(ctx: Context<CompleteEscrow>) -> Result<()> {
-        complete::handler(ctx)
+        complete_handler(ctx)
     }
 
     pub fn cancel(ctx: Context<CancelEscrow>) -> Result<()> {
-        cancel_escrow::handler(ctx)
+        cancel_escrow_handler(ctx)
     }
 }
 

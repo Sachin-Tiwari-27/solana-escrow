@@ -1,5 +1,9 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Burn, CloseAccount, Mint, Token, TokenAccount};
+use anchor_spl::token_interface::{
+    TokenAccount, TokenInterface, transfer_checked, TransferChecked, Mint, CloseAccount, close_account
+};
+
+use crate::{state::Escrow, error::EscrowError};
 
 #[derive(Accounts)]
 pub struct CancelEscrow<'info> {
@@ -9,97 +13,77 @@ pub struct CancelEscrow<'info> {
     #[account(
         mut,
         close = initializer,
+        seeds = [b"escrow", initializer.key().as_ref()],
+        bump = escrow_account.bump,
         has_one = initializer,
+        has_one = initializer_receive_token_account
     )]
-    pub escrow: Account<'info, EscrowAccount>,
+    pub escrow_account: Account<'info, Escrow>,
     
     #[account(
         mut,
-        seeds = [b"vault", escrow.key().as_ref()],
-        bump,
-        token::mint = mint,
-        token::authority = vault,
+        seeds = [b"vault", escrow_account.key().as_ref()],
+        bump = escrow_account.vault_bump,
     )]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: InterfaceAccount<'info, TokenAccount>,
     
-    // Add the mint account explicitly
-    #[account(
-        address = vault.mint
-    )]
-    pub mint: Account<'info, Mint>,
+    /// The mint for the token being escrowed
+    pub mint: InterfaceAccount<'info, Mint>,
     
-    #[account(
-        mut,
-        token::mint = mint,
-        token::authority = initializer,
-    )]
-    pub initializer_deposit_token_account: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub initializer_receive_token_account: InterfaceAccount<'info, TokenAccount>,
     
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
-pub fn handler(ctx: Context<CancelEscrow>) -> Result<()> {
-    let escrow_key = ctx.accounts.escrow.key();
+pub fn cancel_escrow_handler(ctx: Context<CancelEscrow>) -> Result<()> {
+    let escrow = &ctx.accounts.escrow_account;
+
+    // ❌ If already completed, cannot cancel
+    require!(!escrow.completed, EscrowError::AlreadyCompleted);
+
+    // ❌ If not deposited yet, nothing to cancel
+    require!(escrow.deposited, EscrowError::NotFunded);
+
+    let escrow_key = ctx.accounts.escrow_account.key();
     let seeds = &[
         b"vault".as_ref(),
         escrow_key.as_ref(),
-        &[ctx.bumps.vault],
+        &[escrow.vault_bump],
     ];
     let signer_seeds = &[&seeds[..]];
     
     // Transfer tokens back to initializer
+    let cpi_accounts = TransferChecked {
+        from: ctx.accounts.vault.to_account_info(),
+        mint: ctx.accounts.mint.to_account_info(),
+        to: ctx.accounts.initializer_receive_token_account.to_account_info(),
+        authority: ctx.accounts.escrow_account.to_account_info(),
+    };
+
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_program.to_account_info(),
-        anchor_spl::token::Transfer {
-            from: ctx.accounts.vault.to_account_info(),
-            to: ctx.accounts.initializer_deposit_token_account.to_account_info(),
-            authority: ctx.accounts.vault.to_account_info(),
-        },
+        cpi_accounts,
         signer_seeds,
     );
-    anchor_spl::token::transfer(cpi_ctx, ctx.accounts.vault.amount)?;
-    
-    // Burn any remaining tokens in vault if needed
-    if ctx.accounts.vault.amount > 0 {
-        let burn_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            Burn {
-                mint: ctx.accounts.mint.to_account_info(), // Now using mint account
-                from: ctx.accounts.vault.to_account_info(),
-                authority: ctx.accounts.vault.to_account_info(),
-            },
-            signer_seeds,
-        );
-        anchor_spl::token::burn(burn_ctx, ctx.accounts.vault.amount)?;
-    }
+
+    // Get decimals from the mint and transfer the escrow amount
+    let decimals = ctx.accounts.mint.decimals;
+    transfer_checked(cpi_ctx, escrow.amount, decimals)?;
     
     // Close the vault account
+    let close_accounts = CloseAccount {
+        account: ctx.accounts.vault.to_account_info(),
+        destination: ctx.accounts.initializer.to_account_info(),
+        authority: ctx.accounts.escrow_account.to_account_info(),
+    };
+
     let close_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_program.to_account_info(),
-        CloseAccount {
-            account: ctx.accounts.vault.to_account_info(),
-            destination: ctx.accounts.initializer.to_account_info(),
-            authority: ctx.accounts.vault.to_account_info(),
-        },
+        close_accounts,
         signer_seeds,
     );
-    anchor_spl::token::close_account(close_ctx)?;
-    
-    // Access decimals from mint account
-    let decimals = ctx.accounts.mint.decimals;
-    msg!("Mint decimals: {}", decimals);
+    close_account(close_ctx)?;
     
     Ok(())
-}
-
-// Assuming you have this struct defined somewhere
-#[account]
-pub struct EscrowAccount {
-    pub initializer: Pubkey,
-    pub mint: Pubkey,
-    pub vault: Pubkey,
-    pub initializer_deposit_token_account: Pubkey,
-    pub taker_receive_token_account: Pubkey,
-    pub initializer_amount: u64,
-    pub taker_amount: u64,
 }

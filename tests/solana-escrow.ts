@@ -71,7 +71,7 @@ describe("solana-escrow", () => {
       mint,
       initializerDepositAccount.address,
       initializer,
-      1_000_000
+      2_000_000 // Mint more tokens for multiple tests
     );
   });
 
@@ -122,6 +122,7 @@ describe("solana-escrow", () => {
         initializerDepositTokenAccount: initializerDepositAccount.address,
         escrowAccount: escrowPDA,
         vault: vaultPDA,
+        mint: mint,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .signers([initializer])
@@ -156,6 +157,7 @@ describe("solana-escrow", () => {
         escrowAccount: escrowPDA,
         vault: vaultPDA,
         initializerReceiveTokenAccount: initializerReceiveAccount.address,
+        mint: mint,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .signers([taker])
@@ -165,31 +167,100 @@ describe("solana-escrow", () => {
     assert.equal(postTaker - preTaker, 1_000_000);
   });
 
-  it("Cancels escrow (refunds buyer)", async () => {
-    const [escrowPDA] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("escrow"), initializer.publicKey.toBuffer()],
-      program.programId
+  it("Cancels escrow (separate escrow instance)", async () => {
+    // Create a new keypair for a separate escrow test
+    const cancelInitializer = anchor.web3.Keypair.generate();
+    
+    // Airdrop to the new initializer
+    await provider.connection.confirmTransaction(
+      await provider.connection.requestAirdrop(cancelInitializer.publicKey, 2e9),
+      "confirmed"
     );
-    const [vaultPDA] = await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("vault"), escrowPDA.toBuffer()],
+
+    // Create token accounts for the new initializer
+    const cancelInitializerDepositAccount = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      cancelInitializer,
+      mint,
+      cancelInitializer.publicKey
+    );
+
+    const cancelInitializerReceiveAccount = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      cancelInitializer,
+      mint,
+      cancelInitializer.publicKey
+    );
+
+    // Mint tokens to the new initializer
+    await mintTo(
+      provider.connection,
+      initializer, // Original mint authority
+      mint,
+      cancelInitializerDepositAccount.address,
+      initializer,
+      1_000_000
+    );
+
+    // Create PDAs for the new escrow
+    const [cancelEscrowPDA] = await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("escrow"), cancelInitializer.publicKey.toBuffer()],
       program.programId
     );
 
-    const preBuyer = await getTokenBalance(provider, initializerReceiveAccount.address);
+    const [cancelVaultPDA] = await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("vault"), cancelEscrowPDA.toBuffer()],
+      program.programId
+    );
 
+    // Initialize the new escrow
+    await program.methods
+      .initializeEscrow(new anchor.BN(1_000_000))
+      .accounts({
+        initializer: cancelInitializer.publicKey,
+        initializerDepositTokenAccount: cancelInitializerDepositAccount.address,
+        initializerReceiveTokenAccount: cancelInitializerReceiveAccount.address,
+        escrowAccount: cancelEscrowPDA,
+        vault: cancelVaultPDA,
+        mint: mint,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      })
+      .signers([cancelInitializer])
+      .rpc();
+
+    // Deposit tokens
+    await program.methods
+      .deposit()
+      .accounts({
+        initializer: cancelInitializer.publicKey,
+        initializerDepositTokenAccount: cancelInitializerDepositAccount.address,
+        escrowAccount: cancelEscrowPDA,
+        vault: cancelVaultPDA,
+        mint: mint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([cancelInitializer])
+      .rpc();
+
+    const preBuyer = await getTokenBalance(provider, cancelInitializerReceiveAccount.address);
+
+    // Cancel the escrow
     await program.methods
       .cancel()
       .accounts({
-        initializer: initializer.publicKey,
-        initializerReceiveTokenAccount: initializerReceiveAccount.address,
-        escrowAccount: escrowPDA,
-        vault: vaultPDA,
+        initializer: cancelInitializer.publicKey,
+        initializerReceiveTokenAccount: cancelInitializerReceiveAccount.address,
+        escrowAccount: cancelEscrowPDA,
+        vault: cancelVaultPDA,
+        mint: mint,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
-      .signers([initializer])
+      .signers([cancelInitializer])
       .rpc();
 
-    const postBuyer = await getTokenBalance(provider, initializerReceiveAccount.address);
+    const postBuyer = await getTokenBalance(provider, cancelInitializerReceiveAccount.address);
     assert.equal(postBuyer - preBuyer, 1_000_000);
   });
 });
